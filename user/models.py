@@ -1,4 +1,5 @@
 from django.db import models
+from rest_framework import serializers
 
 
 # Create your models here.
@@ -17,3 +18,8 @@ class SysUser(models.Model):
 
     class Meta:
         db_table = "sys_user"
+
+class SysUserSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SysUser
+        fields = '__all__'

@@ -3,7 +3,9 @@ from django.shortcuts import render
 from django.views import View
 from rest_framework_jwt.settings import api_settings
 
-from user.models import SysUser
+from menu.models import SysMenu, SysMenuSerializer
+from role.models import SysRole
+from user.models import SysUser, SysUserSerializer
 
 
 # Create your views here.
@@ -38,16 +40,62 @@ class JwtTestView(View):
 
 
 class LoginView(View):
+
+    # 构造菜单树
+    def buildTreeMenu(self, sysMenuList):
+        resultMenuList: list[SysMenu] = list()
+        for menu in sysMenuList:
+            # 寻找子节点
+            for e in sysMenuList:
+                if e.parent_id == menu.id:
+                    if not hasattr(menu, "children"):
+                        menu.children = list()
+                    menu.children.append(e)
+            # 判断父节点，添加到集合
+            if menu.parent_id == 0:
+                resultMenuList.append(menu)
+        return resultMenuList
+
     def post(self, request):
         username = request.GET.get('username')
         password = request.GET.get('password')
         try:
             user = SysUser.objects.get(username=username, password=password)
-            jwt_payload_handler = api_settings.JWT_PAYLOAD_HANDLER
+            print(type(user))
+            jwt_payload_handler = api_settings.JWT_PAYLOAD_HANDLER  # 小写快捷键ctrl+shift+U
             jwt_encode_handler = api_settings.JWT_ENCODE_HANDLER
+            # 将用户对象传递进去，获取到该对象的属性值
             payload = jwt_payload_handler(user)
+            # 将属性值编码成jwt格式的字符串
             token = jwt_encode_handler(payload)
+
+            roleList = SysRole.objects.raw(
+                "SELECT id,name FROM sys_role WHERE id IN (SELECT role_id FROM sys_user_role WHERE user_id=" + str(
+                    user.id) + ")")
+            print("roleList=", roleList)
+
+            menuSet: set[SysMenu] = set()
+            for row in roleList:
+                print(row.id, row.name)
+                menuList = SysMenu.objects.raw(
+                    "SELECT * FROM sys_menu WHERE id IN (SELECT menu_id FROM sys_role_menu WHERE role_id=" + str(
+                        row.id) + ")")
+                for row2 in menuList:
+                    print(row2.id, row2.name)
+                    menuSet.add(row2)
+            menuList: list[SysMenu] = list(menuSet)  # set转list
+            sorted_menuList = sorted(menuList)  # 根据order_num排序
+            print(sorted_menuList)
+            # 构造菜单树
+            sysMenuList: list[SysMenu] = self.buildTreeMenu(sorted_menuList)
+            print(sysMenuList)
+            serializerMenuList = list()
+            for sysMenu in sysMenuList:
+                serializerMenuList.append(SysMenuSerializer(sysMenu).data)
+
+
         except Exception as e:
             print(e)
-            return JsonResponse({'code': 400, 'info': '用户名或密码错误！'})
-        return JsonResponse({'code': 200, 'info': '登录成功！', 'token': token})
+            return JsonResponse({'code': 500, 'info': '用户名或者密码错误！'})
+        return JsonResponse({'code': 200, 'token': token, 'user': SysUserSerializer(user).data, 'info': '登录成功！',
+                             'menuList': serializerMenuList})

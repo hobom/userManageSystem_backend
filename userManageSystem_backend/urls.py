@@ -15,10 +15,14 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 from django.contrib import admin
-from django.urls import path, include
+from django.urls import path, include, re_path
+from django.views.static import serve
+
+from userManageSystem_backend import settings
 
 urlpatterns = [
     path('user/', include('user.urls')),  # 用户模块
     path('role/', include('role.urls')),  # 角色模块
     path('menu/', include('menu.urls')),  # 权限模块
+    re_path('media/(?P<path>.*)', serve, {'document_root': settings.MEDIA_ROOT}, name='media')
 ]

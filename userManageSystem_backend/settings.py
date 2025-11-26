@@ -52,6 +52,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'user.middleware.JwtAuthenticationMiddleware',
 ]
 
 ROOT_URLCONF = 'userManageSystem_backend.urls'
@@ -138,3 +139,5 @@ CORS_ALLOW_METHODS = [
     'PATCH',
     'DELETE',
 ]
+MEDIA_ROOT = BASE_DIR / 'media'
+MEDIA_URL = 'media/'
