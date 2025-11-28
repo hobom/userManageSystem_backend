@@ -1,11 +1,16 @@
+from datetime import datetime
+
+from django.core.paginator import Paginator
 from django.http import JsonResponse
 from django.shortcuts import render
 from django.views import View
+from rest_framework.utils import json
 from rest_framework_jwt.settings import api_settings
 
 from menu.models import SysMenu, SysMenuSerializer
 from role.models import SysRole
 from user.models import SysUser, SysUserSerializer
+from userManageSystem_backend import settings
 
 
 # Create your views here.
@@ -74,6 +79,8 @@ class LoginView(View):
                     user.id) + ")")
             print("roleList=", roleList)
 
+            roles = ",".join([role.name for role in roleList])
+
             menuSet: set[SysMenu] = set()
             for row in roleList:
                 print(row.id, row.name)
@@ -97,5 +104,87 @@ class LoginView(View):
         except Exception as e:
             print(e)
             return JsonResponse({'code': 500, 'info': '用户名或者密码错误！'})
-        return JsonResponse({'code': 200, 'token': token, 'user': SysUserSerializer(user).data, 'info': '登录成功！',
-                             'menuList': serializerMenuList})
+        return JsonResponse(
+            {'code': 200, 'token': token, 'user': SysUserSerializer(user).data, 'info': '登录成功！', 'roles': roles,
+             'menuList': serializerMenuList})
+
+
+class SaveView(View):
+
+    def post(self, request):
+        data = json.loads(request.body.decode("utf-8"))
+        print(data)
+        if data['id'] == -1:  # 添加
+            pass
+        else:  # 修改
+            obj_sysUser = SysUser(id=data['id'], username=data['username'], password=data['password'],
+                                  avatar=data['avatar'], email=data['email'], phonenumber=data['phonenumber'],
+                                  login_date=data['login_date'], status=data['status'], create_time=data['create_time'],
+                                  update_time=data['update_time'], remark=data['remark'])
+            obj_sysUser.update_time = datetime.now().date()
+            obj_sysUser.save()
+        return JsonResponse({'code': 200})
+
+
+class PwdView(View):
+
+    def post(self, request):
+        data = json.loads(request.body.decode("utf-8"))
+        id = data['id']
+        oldPassword = data['oldPassword']
+        newPassword = data['newPassword']
+        obj_user = SysUser.objects.get(id=id)
+        if obj_user.password == oldPassword:
+            obj_user.password = newPassword
+            obj_user.update_time = datetime.now().date()
+            obj_user.save()
+            return JsonResponse({'code': 200})
+        else:
+            return JsonResponse({'code': 500, 'errorInfo': '原密码错误！'})
+
+class ImageView(View):
+
+    def post(self, request):
+        file = request.FILES.get('avatar')
+        print("file:", file)
+        if file:
+            file_name = file.name
+            suffixName = file_name[file_name.rfind("."):]
+            new_file_name = datetime.now().strftime('%Y%m%d%H%M%S') + suffixName
+            file_path = str(settings.MEDIA_ROOT) + "\\userAvatar\\" + new_file_name
+            print("file_path:", file_path)
+            try:
+                with open(file_path, 'wb') as f:
+                    for chunk in file.chunks():
+                        f.write(chunk)
+                return JsonResponse({'code': 200, 'title': new_file_name})
+            except:
+                return JsonResponse({'code': 500, 'errorInfo': '上传头像失败'})
+
+
+class AvatarView(View):
+
+    def post(self, request):
+        data = json.loads(request.body.decode("utf-8"))
+        id = data['id']
+        avatar = data['avatar']
+        obj_user = SysUser.objects.get(id=id)
+        obj_user.avatar = avatar
+        obj_user.save()
+        return JsonResponse({'code': 200})
+
+
+# 用户信息查询
+class SearchView(View):
+
+    def post(self, request):
+        data = json.loads(request.body.decode("utf-8"))
+        pageNum = data['pageNum']  # 当前页
+        pageSize = data['pageSize']  # 每页大小
+        print(pageNum, pageSize)
+        userListPage = Paginator(SysUser.objects.all(), pageSize).page(pageNum)
+        print(userListPage)
+        obj_users = userListPage.object_list.values()  # 转成字典
+        users = list(obj_users)  # 把外层的容器转为List
+        total = SysUser.objects.count()
+        return JsonResponse({'code': 200, 'userList': users, 'total': total})
